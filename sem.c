@@ -33,6 +33,7 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <errno.h>
+#include <time.h>
 #include "sem.h"
 
 /* If we've got a version of glibc that doesn't define union semun, we do
@@ -56,7 +57,7 @@ union semun {
 	ushort *array;
 };
 #endif
-#endif   
+#endif
 
 /* IMPORTS */
 
@@ -89,7 +90,7 @@ sem_set( sem_id, semn, val )
 		byee( -1 );
 	}
 }
-	
+
 int
 new_sems( nsems )
 	int nsems;
@@ -103,7 +104,7 @@ new_sems( nsems )
 		perror( "internal error, couldn't create semaphore" );
 		byee( -1 );
 	}
-	
+
 	for( i = 0; i < nsems; i++ ){
 		sem_set( sem, i, 1 );
 	}
@@ -124,12 +125,42 @@ do_sem( sem_id, pbuf, err )
 				continue;
 			}
 			report_proc();
-			fprintf( stderr, "internal error pid %d, lock id %d\n",
-				getpid(), sem_id );
+			fprintf( stderr, "internal error pid %d, lock id %d, errno %d\n",
+				getpid(), sem_id, errno );
 			perror( err );
 			byee( -1 );
 		}
 		return;
+	}
+}
+
+static int
+do_sem_nowait( sem_id, pbuf, err, waitms )
+	int sem_id;
+	struct sembuf *pbuf;
+	char *err;
+    int waitms;
+{
+    struct timespec timebuf;
+    timebuf.tv_sec = waitms / 1000;
+    timebuf.tv_nsec = (waitms - (timebuf.tv_sec * 1000)) * 1E6L; // 10ms
+
+	/* This just keeps us going in case of EINTR */
+	while( 1 ){
+		if( semtimedop( sem_id, pbuf, 1, &timebuf ) == -1 ){
+			if( errno == EINTR ){
+				continue;
+			}
+			if( errno == EAGAIN ){
+				return -1;
+			}
+			report_proc();
+			fprintf( stderr, "internal error pid %d, lock id %d, errno %d\n",
+				getpid(), sem_id, errno );
+			perror( err );
+			byee( -1 );
+		}
+		return 0;
 	}
 }
 
@@ -145,6 +176,21 @@ lock( sem_id, semn )
 	sembuf.sem_flg = 0;
 
 	do_sem( sem_id, &sembuf, "lock error" );
+}
+
+int
+lock_nowait( sem_id, semn, waitms )
+	int sem_id;
+	int semn;
+    int waitms;
+{
+	struct sembuf sembuf;
+
+	sembuf.sem_num = semn;
+	sembuf.sem_op = -1;
+	sembuf.sem_flg = 0;
+
+	return do_sem_nowait( sem_id, &sembuf, "lock error", waitms );
 }
 
 void

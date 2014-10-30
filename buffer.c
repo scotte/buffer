@@ -87,27 +87,27 @@
  *
  * Revision 1.5  90/07/22  18:46:38  lmjm
  * Added system 5 support.
- * 
+ *
  * Revision 1.4  90/07/22  18:29:48  lmjm
  * Updated arg handling to be more consistent.
  * Make sofar printing size an option.
- * 
+ *
  * Revision 1.3  90/05/15  23:27:46  lmjm
  * Added -S option (show how much has been written).
  * Added -m option to specify how much shared memory to grab.
  * Now tries to fill this with blocks.
  * reader waits for writer to terminate and then frees the shared mem and sems.
- * 
+ *
  * Revision 1.2  90/01/20  21:37:59  lmjm
  * Reset default number of  blocks and blocksize for best thruput of
  * standard tar 10K Allow.
  * blocks number of blocks to be changed.
  * Don't need a hole in the circular queue since the semaphores prevent block
  * clash.
- * 
+ *
  * Revision 1.1  90/01/17  11:30:23  lmjm
  * Initial revision
- * 
+ *
  */
 #include <stdlib.h>
 #include <string.h>
@@ -200,7 +200,7 @@ int blocksize = DEF_BLOCKSIZE;
 /* Which process... in error reports*/
 char *proc_string = "buffer";
 
-/* Numbers of blocks in the queue. 
+/* Numbers of blocks in the queue.
  */
 #define MAX_BLOCKS 2048
 int blocks = 1;
@@ -257,6 +257,8 @@ int free_shm	= 1;
 int percent	= 0;
 int debug	= 0;
 int Zflag	= 0;
+int nonblock = 0;
+int nonblockwait = 0;
 int writer_status = 0;
 char *progname = "buffer";
 
@@ -276,7 +278,7 @@ main( argc, argv )
 	set_handlers();
 
 	buffer_allocate();
-	
+
 	gettimeofday(&starttime, NULL);
 
 	start_reader_and_writer();
@@ -301,7 +303,7 @@ parse_args( argc, argv )
 	struct stat buf;
 
 
-	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:" )) != -1 ){
+	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:n:w:" )) != -1 ){
 		switch( c ){
 		case 't': /* Print to stderr the total no of bytes written */
 			print_total++;
@@ -396,8 +398,14 @@ parse_args( argc, argv )
 				byee( -1 );
 			}
 			break;
+		case 'n':
+			nonblock = do_size( optarg );
+            break;
+		case 'w':
+			nonblockwait = atoi( optarg );
+            break;
 		default:
-			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size] [-Z] [-d]\n",
+			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size] [-Z] [-n size] [-w waitms] [-d]\n",
 				progname );
 			fprintf( stderr, "-B = blocked device - pad out last block\n" );
 			fprintf( stderr, "-t = show total amount written at end\n" );
@@ -411,11 +419,13 @@ parse_args( argc, argv )
 			fprintf( stderr, "-o outfile = file to write to\n" );
 			fprintf( stderr, "-z size = combined -S/-s flag\n" );
 			fprintf( stderr, "-Z = seek to beginning of output after each 1GB (for some tape drives)\n" );
-			fprintf( stderr, "-d = print debug information to stderr\n" );
+			fprintf( stderr, "-n size = enable nonblocking, if no buffers available, immediately read and purge this size of data\n" );
+			fprintf( stderr, "-w waitms = if nonblocking is enabled, wait this many milliseconds for a buffer before flushing data\n" );
+            fprintf( stderr, "-d = print debug information to stderr\n" );
 			byee( -1 );
 		}
 	}
-	
+
 	if (argc > optind) {
 		fprintf( stderr, "too many arguments\n" );
 		byee( -1 );
@@ -435,6 +445,13 @@ parse_args( argc, argv )
 			byee( -1 );
 		}
 	}
+
+    /* Don't allow -w without -n */
+    if ((nonblockwait > 0 && nonblock == 0) ||
+        (nonblockwait == 0 && nonblock > 0)) {
+        fprintf( stderr, "Must specify both '-w' and '-n' if either used, aborting!\n" );
+        byee( -1 );
+    }
 
 	/* check if fdin or fdout are character special files */
 	if( fstat( fdin, &buf ) != 0 ){
@@ -556,13 +573,13 @@ buffer_allocate()
 	 * level. However, there doesn't seem to be a good reason to keep one block free,
 	 * so we initialize the semaphore to "blocks" instead.
 	 * <mbuck@debian.org> 2004-01-11
-	 */	
+	 */
 #if 0
 	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks - 1 );
 #else
 	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks );
 #endif
-	
+
 	/* Do not detach the shared memory, but leave it mapped. It will be inherited
 	 * over fork just fine and this ensures that it's mapped at the same address
 	 * both in the reader and writer. The original code did a shmdt() here followed
@@ -600,7 +617,7 @@ buffer_remove()
 	if( debug )
 		fprintf( stderr, "%s: removing semaphores and buffer\n", proc_string );
 	remove_sems( pbuffer->semid );
-	
+
 	if( shmctl( buffer_id, IPC_RMID, (struct shmid_ds *)0 ) == -1 ){
 		report_proc();
 		perror( "failed to remove shared memory buffer" );
@@ -678,8 +695,17 @@ get_next_free_block()
 {
 	test_writer();
 
-	/* Maybe wait till there is room in the buffer */
-	lock( pbuffer->semid, pbuffer->blocks_free_lock );
+    if (nonblock > 0) {
+        char buf[nonblock];
+        /* If no blocks free, read and purge some data */
+        if (lock_nowait( pbuffer->semid, pbuffer->blocks_free_lock,nonblockwait ) < 0) {
+            int count = read( fdin, buf, nonblock);
+            fprintf(stderr, "No buffers! - discarded %d\n", count);
+        }
+    } else {
+        /* Maybe wait till there is room in the buffer */
+        lock( pbuffer->semid, pbuffer->blocks_free_lock );
+    }
 
 	curr_block = &pbuffer->block[ pbuffer->next_block_in ];
 
@@ -693,7 +719,7 @@ fill_block()
 	char *start;
 	int toread;
 	static char eof_reached = 0;
-	
+
 	if( eof_reached ){
 		curr_block->bytes = 0;
 		unlock( pbuffer->semid, pbuffer->blocks_used_lock );
@@ -972,7 +998,7 @@ do_size( arg )
 		ret *= 512;
 		break;
 	}
-	
+
 	return ret;
 }
 
@@ -981,7 +1007,7 @@ pr_out()
 {
 	struct timeval now;
 	unsigned long ms_delta, k_per_s;
-	
+
 	gettimeofday(&now, NULL);
 	ms_delta = (now.tv_sec - starttime.tv_sec) * 1000
 		   + (now.tv_usec - starttime.tv_usec) / 1000;

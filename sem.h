@@ -32,5 +32,6 @@ int new_sems();
 /* Perform actions on semaphores */
 void sem_set();
 void lock();
+int lock_nowait();
 void unlock();
 void remove_sems();
