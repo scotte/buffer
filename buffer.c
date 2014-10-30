@@ -78,7 +78,7 @@
  * Christoph Wicki <wicki@iis.ethz.ch>
  *
  * Revision 1.7  1992/07/23  20:42:03  lmjm
- * Added 't' option to print total writen at end.
+ * Added 't' option to print total written at end.
  *
  * Revision 1.6  1992/04/07  19:57:30  lmjm
  * Added Kevins -B and -p options.
@@ -93,7 +93,7 @@
  * Make sofar printing size an option.
  * 
  * Revision 1.3  90/05/15  23:27:46  lmjm
- * Added -S option (show how much has been writen).
+ * Added -S option (show how much has been written).
  * Added -m option to specify how much shared memory to grab.
  * Now tries to fill this with blocks.
  * reader waits for writer to terminate and then frees the shared mem and sems.
@@ -109,6 +109,9 @@
  * Initial revision
  * 
  */
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <signal.h>
@@ -120,21 +123,30 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include "sem.h"
 
 #ifndef lint
 static char *rcsid = "$Header: /a/swan/home/swan/staff/csg/lmjm/src/buffer/RCS/buffer.c,v 1.19 1995/08/24 17:46:28 lmjm Exp lmjm $";
 #endif
 
-#ifndef __alpha
+#if !(defined(__linux__) || defined(__GLIBC__) || defined(__GNU__))
 extern char *shmat();
-#endif /* __alpha */
+#endif
 
 /* General macros */
 #define TRUE 1
 #define FALSE 0
 #define K *1024
 #define M *1024*1024
+
+#if defined __GNUC__ || __STDC_VERSION__ >= 199901L
+#define NUM_K_TYPE unsigned long long
+#define NUM_K_FMT "llu"
+#else
+#define NUM_K_TYPE unsigned long
+#define NUM_K_FMT "lu"
+#endif
 
 /* Some forward declarations */
 void byee();
@@ -159,7 +171,7 @@ void write_block_to_stdout();
 void pr_out();
 void end_writer();
 
-/* When showing print a note every this many bytes writen */
+/* When showing print a note every this many bytes written */
 int showevery = 0;
 #define PRINT_EVERY 10 K
 
@@ -250,7 +262,9 @@ char *progname = "buffer";
 
 char print_total = 0;
 /* Number of K output */
-unsigned long outk = 0;
+NUM_K_TYPE outk = 0;
+
+struct timeval starttime;
 
 int
 main( argc, argv )
@@ -262,6 +276,8 @@ main( argc, argv )
 	set_handlers();
 
 	buffer_allocate();
+	
+	gettimeofday(&starttime, NULL);
 
 	start_reader_and_writer();
 
@@ -287,7 +303,7 @@ parse_args( argc, argv )
 
 	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:" )) != -1 ){
 		switch( c ){
-		case 't': /* Print to stderr the total no of bytes writen */
+		case 't': /* Print to stderr the total no of bytes written */
 			print_total++;
 			break;
 		case 'u': /* pause after write for given microseconds */
@@ -381,11 +397,11 @@ parse_args( argc, argv )
 			}
 			break;
 		default:
-			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size]\n",
+			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size] [-Z] [-d]\n",
 				progname );
 			fprintf( stderr, "-B = blocked device - pad out last block\n" );
-			fprintf( stderr, "-t = show total amount writen at end\n" );
-			fprintf( stderr, "-S size = show amount writen every size bytes\n" );
+			fprintf( stderr, "-t = show total amount written at end\n" );
+			fprintf( stderr, "-S size = show amount written every size bytes\n" );
 			fprintf( stderr, "-m size = size of shared mem chunk to grab\n" );
 			fprintf( stderr, "-b num = number of blocks in queue\n" );
 			fprintf( stderr, "-p percent = don't start writing until percent blocks filled\n" );
@@ -394,8 +410,15 @@ parse_args( argc, argv )
 			fprintf( stderr, "-i infile = file to read from\n" );
 			fprintf( stderr, "-o outfile = file to write to\n" );
 			fprintf( stderr, "-z size = combined -S/-s flag\n" );
+			fprintf( stderr, "-Z = seek to beginning of output after each 1GB (for some tape drives)\n" );
+			fprintf( stderr, "-d = print debug information to stderr\n" );
 			byee( -1 );
 		}
+	}
+	
+	if (argc > optind) {
+		fprintf( stderr, "too many arguments\n" );
+		byee( -1 );
 	}
 
 	if (zflag) showevery = blocksize;
@@ -507,14 +530,14 @@ buffer_allocate()
 	get_buffer();
 
 	if( debug )
-		fprintf( stderr, "%s pbuffer is 0x%08x, buffer_size is %d [%d x %d]\n",
+		fprintf( stderr, "%s pbuffer is 0x%08lx, buffer_size is %d [%d x %d]\n",
 			proc_string,
-			(char *)pbuffer, buffer_size, blocks, blocksize );
+			(unsigned long)pbuffer, buffer_size, blocks, blocksize );
 
 #ifdef SYS5
-	memset( (char *)pbuffer, '\0', buffer_size );
+	memset( pbuffer->data_space, '\0', blocks * blocksize );
 #else
-	bzero( (char *)pbuffer, buffer_size );
+	bzero( pbuffer->data_space, blocks * blocksize );
 #endif
 	pbuffer->semid = -1;
 	pbuffer->blocks_used_lock = -1;
@@ -528,11 +551,31 @@ buffer_allocate()
 	pbuffer->blocks_free_lock = 1;
 	/* start this off so lock() can be called on it for each block
 	 * till all the blocks are used up */
+	/* Initializing the semaphore to "blocks - 1" causes a hang when using option
+	 * "-p 100" because it always keeps one block free, so we'll never reach 100% fill
+	 * level. However, there doesn't seem to be a good reason to keep one block free,
+	 * so we initialize the semaphore to "blocks" instead.
+	 * <mbuck@debian.org> 2004-01-11
+	 */	
+#if 0
 	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks - 1 );
-
+#else
+	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks );
+#endif
+	
+	/* Do not detach the shared memory, but leave it mapped. It will be inherited
+	 * over fork just fine and this ensures that it's mapped at the same address
+	 * both in the reader and writer. The original code did a shmdt() here followed
+	 * by shmat() both in the reader and writer and relied on it getting mapped at
+	 * the same address in both processes, which of course isn't guaranteed and
+	 * actually did fail under some unknown circumstances on amd64.
+	 * <mbuck@debian.org> 2008-05-09
+	 */
+#if 0
 	/* Detattach the shared memory so the fork doesnt do anything odd */
 	shmdt( (char *)pbuffer );
 	pbuffer = NO_BUFFER;
+#endif
 }
 
 void
@@ -620,8 +663,6 @@ reader()
 	if( debug )
 		fprintf( stderr, "R: Entering reader\n" );
 
-	get_buffer();
-
 	while( 1 ){
 		get_next_free_block();
 		if( ! fill_block() )
@@ -648,7 +689,7 @@ get_next_free_block()
 int
 fill_block()
 {
-	int bytes;
+	int bytes = 0;
 	char *start;
 	int toread;
 	static char eof_reached = 0;
@@ -707,14 +748,12 @@ writer()
 {
 	int filled = 0;
 	int maxfilled = (blocks * percent) / 100;
-	int first_block;
+	int first_block = 0;
 
 	if( debug )
 		fprintf( stderr, "\tW: Entering writer\n blocks = %d\n maxfilled = %d\n",
 			blocks,
 			maxfilled );
-
-	get_buffer();
 
 	while( 1 ){
 		if( !filled )
@@ -742,7 +781,7 @@ writer()
 	}
 
 	if( print_total ){
-		fprintf( stderr, "Kilobytes Out %lu\n", outk );
+		fprintf( stderr, "Kilobytes Out %" NUM_K_FMT "\n", outk );
 	}
 
 	if( debug )
@@ -783,14 +822,14 @@ write_blocks_to_stdout( filled, first_block )
 void
 write_block_to_stdout()
 {
-	static unsigned long out = 0;
+	unsigned long out = 0;
 	static unsigned long last_gb = 0;
-	static unsigned long next_k = 0;
+	static NUM_K_TYPE next_k = 0;
 	int written;
 
 	if( next_k == 0 && showevery ){
 		if( debug > 3 )
-			fprintf( stderr, "W: next_k = %lu showevery = %d\n", next_k, showevery );
+			fprintf( stderr, "W: next_k = %" NUM_K_FMT " showevery = %d\n", next_k, showevery );
 		showevery = showevery / 1024;
 		next_k = showevery;
 	}
@@ -798,7 +837,7 @@ write_block_to_stdout()
 	if( (written = write( fdout, curr_block->data, curr_block->bytes )) != curr_block->bytes ){
 		report_proc();
 		perror( "write of data failed" );
-		fprintf( stderr, "bytes to write=%d, bytes written=%d, total written %10luK\n", curr_block->bytes, written, outk );
+		fprintf( stderr, "bytes to write=%d, bytes written=%d, total written %10" NUM_K_FMT "K\n", curr_block->bytes, written, outk );
 		byee( -1 );
 	}
 
@@ -825,7 +864,7 @@ write_block_to_stdout()
 	}
 	if( showevery ){
 		if( debug > 3 )
-			fprintf( stderr, "W: outk = %lu, next_k = %lu\n",
+			fprintf( stderr, "W: outk = %" NUM_K_FMT ", next_k = %" NUM_K_FMT "\n",
 				outk, next_k );
 		if( outk >= next_k ){
 			pr_out();
@@ -914,13 +953,12 @@ int
 do_size( arg )
 	char *arg;
 {
-	char format[ 20 ];
-	int ret;
+	int ret = 0;
 
-	*format = '\0';
-	sscanf( arg, "%d%s", &ret, format );
+	char unit = '\0';
+	sscanf( arg, "%d%c", &ret, &unit );
 
-	switch( *format ){
+	switch( unit ){
 	case 'm':
 	case 'M':
 		ret = ret K K;
@@ -941,7 +979,36 @@ do_size( arg )
 void
 pr_out()
 {
-	fprintf( stderr, " %10luK\r", outk );
+	struct timeval now;
+	unsigned long ms_delta, k_per_s;
+	
+	gettimeofday(&now, NULL);
+	ms_delta = (now.tv_sec - starttime.tv_sec) * 1000
+		   + (now.tv_usec - starttime.tv_usec) / 1000;
+	if (ms_delta) {
+		/* Use increased accuracy for small amounts of data,
+		 * decreased accuracy for *huge* throughputs > 4.1GB/s
+		 * to avoid division by 0. This will overflow if your
+		 * machine's throughput exceeds 4TB/s - you deserve to
+		 * lose if you're still using 32 bit longs on such a
+		 * beast ;-)
+		 * <mbuck@debian.org>
+		 */
+		if (outk < ULONG_MAX / 1000) {
+			k_per_s = (outk * 1000) / ms_delta;
+		} else if (ms_delta >= 1000) {
+			k_per_s = outk / (ms_delta / 1000);
+		} else {
+			k_per_s = (outk / ms_delta) * 1000;
+		}
+		fprintf( stderr, " %10" NUM_K_FMT "K, %10luK/s\r", outk, k_per_s );
+	} else {
+		if (outk) {
+			fprintf( stderr, " %10" NUM_K_FMT "K,          ?K/s\r", outk );
+		} else {
+			fprintf( stderr, "          0K,          0K/s\r");
+		}
+	}
 }
 
 #ifdef SYS5

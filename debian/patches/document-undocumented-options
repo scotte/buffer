@@ -1,0 +1,44 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -397,7 +397,7 @@
+ 			}
+ 			break;
+ 		default:
+-			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size]\n",
++			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size] [-Z] [-d]\n",
+ 				progname );
+ 			fprintf( stderr, "-B = blocked device - pad out last block\n" );
+ 			fprintf( stderr, "-t = show total amount written at end\n" );
+@@ -410,6 +410,8 @@
+ 			fprintf( stderr, "-i infile = file to read from\n" );
+ 			fprintf( stderr, "-o outfile = file to write to\n" );
+ 			fprintf( stderr, "-z size = combined -S/-s flag\n" );
++			fprintf( stderr, "-Z = seek to beginning of output after each 1GB (for some tape drives)\n" );
++			fprintf( stderr, "-d = print debug information to stderr\n" );
+ 			byee( -1 );
+ 		}
+ 	}
+--- a/buffer.man
++++ b/buffer.man
+@@ -25,9 +25,9 @@
+ buffer \- very fast reblocking program
+ .SH SYNTAX
+ .B buffer
+-[\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-m size\fP]
++[\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-z size\fP] [\fB\-m size\fP]
+ [\fB\-p percentage\fP] [\fB\-u microseconds\fP] [\fB-B\fR] [\fB-t\fR]
+-[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] 
++[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] [\fB-d\fR]
+ .SH OPTIONS
+ .TP 5
+ .B \-i filename
+@@ -86,6 +86,9 @@
+ Use this flag with extreme care.  It can only be used on devices where
+ an lseek does not rewind the tape but does reset the kernels position
+ flags.  It is used to allow more than 2 gigabytes to be written.
++.TP
++.B \-d
++Print debug information to stderr during operation.
+ .PP
+ Sizes are a number with an optional trailing character.   A 'b' 
+ multiplies the size by 512, a 'k' by 1024 and an 'm' by a meg.

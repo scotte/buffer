@@ -1,0 +1,63 @@
+--- a/sem.c
++++ b/sem.c
+@@ -27,6 +27,7 @@
+  * semaphores */
+ 
+ #include <stdio.h>
++#include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/ipc.h>
+@@ -34,6 +35,20 @@
+ #include <errno.h>
+ #include "sem.h"
+ 
++/* If we've got a version of glibc that doesn't define union semun, we do
++ * it ourseleves like in semctl(2). Otherwise, fall back to the original
++ * buffer behaviour of defining it (differetly!) only on some systems.
++ *
++ * mbuck@debian.org, 1999/08/29
++ */
++#if defined(__GNU_LIBRARY__) && defined(_SEM_SEMUN_UNDEFINED)
++union semun {
++	int val;			/* value for SETVAL              */
++	struct semid_ds *buf;		/* buffer for IPC_STAT & IPC_SET */
++	unsigned short int *array;	/* array for GETALL & SETALL     */
++	struct seminfo *__buf;		/* buffer for IPC_INFO           */
++};
++#else
+ #if defined(SYS5) || defined(ultrix) || defined(_AIX)
+ union semun {
+ 	int val;
+@@ -41,6 +56,7 @@
+ 	ushort *array;
+ };
+ #endif
++#endif   
+ 
+ /* IMPORTS */
+ 
+@@ -95,7 +111,7 @@
+ 	return sem;
+ }
+ 
+-static
++static void
+ do_sem( sem_id, pbuf, err )
+ 	int sem_id;
+ 	struct sembuf *pbuf;
+@@ -149,10 +165,13 @@
+ remove_sems( sem_id )
+ 	int sem_id;
+ {
++	union semun arg;
++
+ 	if( sem_id == -1 )
+ 		return;
+ 
+-	if( semctl( sem_id, 0, IPC_RMID, NULL ) == -1 ){
++	arg.val = 0;
++	if( semctl( sem_id, 0, IPC_RMID, arg ) == -1 ){
+ 		report_proc();
+ 		perror( "internal error, failed to remove semaphore" );
+ 	}

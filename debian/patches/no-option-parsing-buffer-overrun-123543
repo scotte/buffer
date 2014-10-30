@@ -1,0 +1,20 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -935,13 +935,12 @@
+ do_size( arg )
+ 	char *arg;
+ {
+-	char format[ 20 ];
+-	int ret;
++	int ret = 0;
+ 
+-	*format = '\0';
+-	sscanf( arg, "%d%s", &ret, format );
++	char unit = '\0';
++	sscanf( arg, "%d%c", &ret, &unit );
+ 
+-	switch( *format ){
++	switch( unit ){
+ 	case 'm':
+ 	case 'M':
+ 		ret = ret K K;

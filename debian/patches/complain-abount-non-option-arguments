@@ -1,0 +1,14 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -397,6 +397,11 @@
+ 			byee( -1 );
+ 		}
+ 	}
++	
++	if (argc > optind) {
++		fprintf( stderr, "too many arguments\n" );
++		byee( -1 );
++	}
+ 
+ 	if (zflag) showevery = blocksize;
+ 

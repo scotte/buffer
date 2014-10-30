@@ -1,0 +1,14 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -126,9 +126,9 @@
+ static char *rcsid = "$Header: /a/swan/home/swan/staff/csg/lmjm/src/buffer/RCS/buffer.c,v 1.19 1995/08/24 17:46:28 lmjm Exp lmjm $";
+ #endif
+ 
+-#ifndef __alpha
++#if !(defined(__linux__) || defined(__GLIBC__) || defined(__GNU__))
+ extern char *shmat();
+-#endif /* __alpha */
++#endif
+ 
+ /* General macros */
+ #define TRUE 1

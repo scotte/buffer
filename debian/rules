@@ -1,0 +1,71 @@
+#!/usr/bin/make -f
+
+CFLAGS = -g -Wall -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS += -O0
+else
+  CFLAGS += -O2
+endif
+
+
+.PHONY: build
+build: build-arch build-indep
+
+.PHONY: build-arch
+build-arch: build-stamp
+
+.PHONY: build-indep
+build-indep: build-stamp
+
+build-stamp:
+	dh_testdir
+
+	make CFLAGS="$(CFLAGS)"
+
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	-rm -f build-stamp install-stamp
+	make clean
+	dh_clean
+
+install: install-stamp
+install-stamp: build-stamp
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs usr/bin usr/share/man/man1 usr/share/lintian/overrides
+	make install INSTBIN=debian/buffer/usr/bin INSTMAN=debian/buffer/usr/share/man/man1 S=1
+	touch install-stamp
+	
+binary-indep: build install
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installdocs README
+#	dh_installexamples
+#	dh_installmenu
+#	dh_installemacsen
+#	dh_installinit
+#	dh_installcron
+#	dh_installman
+#	dh_undocumented
+	dh_installchangelogs
+	install -m 644 debian/buffer.lintian-override debian/buffer/usr/share/lintian/overrides/buffer
+	dh_strip
+	dh_compress
+	dh_fixperms
+#	dh_suidregister
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+#	dh_makeshlibs
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

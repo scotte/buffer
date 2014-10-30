@@ -1,0 +1,27 @@
+This package was debianized by Martin Buck <mbuck@debian.org> on
+Wed, 27 Aug 1997 01:11:29 +0200.
+
+It was downloaded from
+http://sunsite.org.uk/public/public/packages/buffer/
+
+Upstream Author: Lee McLoughlin
+
+Copyright (C) 1990,1991  Lee McLoughlin
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 1, or (at your option)
+ any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ with the Debian GNU/Linux distribution in /usr/share/common-licenses/GPL.
+ If not, see <http://www.gnu.org/licenses/>.
+
+ In addtion under NO circumstances can I (Lee McLoughlin), or Imperial
+ College, be held liable for any event caused by the running or storing of
+ this program or its documentation.

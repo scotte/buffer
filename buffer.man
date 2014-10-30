@@ -25,9 +25,9 @@
 buffer \- very fast reblocking program
 .SH SYNTAX
 .B buffer
-[\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-m size\fP]
+[\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-z size\fP] [\fB\-m size\fP]
 [\fB\-p percentage\fP] [\fB\-u microseconds\fP] [\fB-B\fR] [\fB-t\fR]
-[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] 
+[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] [\fB-d\fR]
 .SH OPTIONS
 .TP 5
 .B \-i filename
@@ -37,7 +37,8 @@ Use the given file as the input file.  The default is stdin.
 Use the given file as the output file.  The default is stdout.
 .TP
 .B \-S size
-After every chunk this size has been writen print out how much been writen so far.
+After every chunk of this size has been written, print out how much has
+been written so far. Also prints the total throughput.
 By default this is not set.
 .TP
 .B \-s size
@@ -67,13 +68,13 @@ full.  A percentage around 75 often proves best. Defaults to zero.
 .TP
 .B \-u microseconds
 After every write pause for this many microseconds.  Defaults to zero.
-(Suprisingly a small sleep, 100 usecs, after each write can greatly enhance
+(Surprisingly a small sleep, 100 usecs, after each write can greatly enhance
 throughput on some drives.)
 .TP
 .B \-B
-Force each block writen to be padded out to the blocksize.  This is needed by some tape
+Force each block written to be padded out to the blocksize.  This is needed by some tape
 and cartridge drives.  Defaults to unpadded.  This only affects the
-last block writen.
+last block written.
 .TP
 .B \-t
 On exiting print to stderr a brief message showing the total number of
@@ -82,9 +83,12 @@ bytes written.
 .B \-Z
 If reading/writing directly to a character device (like a tape drive)
 then after each gigabyte perform an lseek to the start of the file.
-Use this flag with extreme care.  If can only be used on devices where
+Use this flag with extreme care.  It can only be used on devices where
 an lseek does not rewind the tape but does reset the kernels position
 flags.  It is used to allow more than 2 gigabytes to be written.
+.TP
+.B \-d
+Print debug information to stderr during operation.
 .PP
 Sizes are a number with an optional trailing character.   A 'b' 
 multiplies the size by 512, a 'k' by 1024 and an 'm' by a meg.
@@ -126,6 +130,25 @@ $ \fBdump fu - | rsh somehost 'buffer -s 16k > /dev/nrst8'\fP
 $ \fBtar cf - . | buffer | 
 .br
 \ \ \ rsh somehost 'buffer -S 500K -p 75 > /dev/rst0'\fP
+.SH BUFFER LIMITS
+There are 2 limits in
+.I buffer
+affecting the maximum total buffer size: The maximum number of blocks (2048)
+and the maximum size of a block (512kB). This results in a maximum total
+buffer size of 1GB.
+.PP
+
+Note that there is also a kernel limit for the maximum size of a shared
+memory segment (used by
+.I buffer
+internally) which is typically much lower than the limits in
+.IR buffer .
+So if
+.I buffer
+complains about not being able to create a shared memory segment, this limit
+might have to be raised using the command \fBsysctl kernel.shmmax=\fP\fIXXX\fP (see also
+sysctl(1) and proc(5)).
+
 .SH BUGS
 Internally, for printing purposes, buffer counts in terms of the
 number of kilobytes output.  If the blocksize you use is not a whole

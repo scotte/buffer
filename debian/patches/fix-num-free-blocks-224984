@@ -1,0 +1,21 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -528,8 +528,17 @@
+ 	pbuffer->blocks_free_lock = 1;
+ 	/* start this off so lock() can be called on it for each block
+ 	 * till all the blocks are used up */
++	/* Initializing the semaphore to "blocks - 1" causes a hang when using option
++	 * "-p 100" because it always keeps one block free, so we'll never reach 100% fill
++	 * level. However, there doesn't seem to be a good reason to keep one block free,
++	 * so we initialize the semaphore to "blocks" instead.
++	 * <mbuck@debian.org> 2004-01-11
++	 */	
++#if 0
+ 	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks - 1 );
+-
++#else
++	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks );
++#endif
+ 	/* Detattach the shared memory so the fork doesnt do anything odd */
+ 	shmdt( (char *)pbuffer );
+ 	pbuffer = NO_BUFFER;

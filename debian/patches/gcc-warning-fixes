@@ -1,0 +1,20 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -679,7 +679,7 @@
+ int
+ fill_block()
+ {
+-	int bytes;
++	int bytes = 0;
+ 	char *start;
+ 	int toread;
+ 	static char eof_reached = 0;
+@@ -738,7 +738,7 @@
+ {
+ 	int filled = 0;
+ 	int maxfilled = (blocks * percent) / 100;
+-	int first_block;
++	int first_block = 0;
+ 
+ 	if( debug )
+ 		fprintf( stderr, "\tW: Entering writer\n blocks = %d\n maxfilled = %d\n",

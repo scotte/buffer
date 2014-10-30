@@ -1,0 +1,87 @@
+--- a/buffer.man
++++ b/buffer.man
+@@ -37,7 +37,8 @@
+ Use the given file as the output file.  The default is stdout.
+ .TP
+ .B \-S size
+-After every chunk this size has been writen print out how much been writen so far.
++After every chunk of this size has been written, print out how much has
++been written so far. Also prints the total throughput.
+ By default this is not set.
+ .TP
+ .B \-s size
+@@ -67,13 +68,13 @@
+ .TP
+ .B \-u microseconds
+ After every write pause for this many microseconds.  Defaults to zero.
+-(Suprisingly a small sleep, 100 usecs, after each write can greatly enhance
++(Surprisingly a small sleep, 100 usecs, after each write can greatly enhance
+ throughput on some drives.)
+ .TP
+ .B \-B
+-Force each block writen to be padded out to the blocksize.  This is needed by some tape
++Force each block written to be padded out to the blocksize.  This is needed by some tape
+ and cartridge drives.  Defaults to unpadded.  This only affects the
+-last block writen.
++last block written.
+ .TP
+ .B \-t
+ On exiting print to stderr a brief message showing the total number of
+@@ -82,7 +83,7 @@
+ .B \-Z
+ If reading/writing directly to a character device (like a tape drive)
+ then after each gigabyte perform an lseek to the start of the file.
+-Use this flag with extreme care.  If can only be used on devices where
++Use this flag with extreme care.  It can only be used on devices where
+ an lseek does not rewind the tape but does reset the kernels position
+ flags.  It is used to allow more than 2 gigabytes to be written.
+ .PP
+--- a/buffer.c
++++ b/buffer.c
+@@ -78,7 +78,7 @@
+  * Christoph Wicki <wicki@iis.ethz.ch>
+  *
+  * Revision 1.7  1992/07/23  20:42:03  lmjm
+- * Added 't' option to print total writen at end.
++ * Added 't' option to print total written at end.
+  *
+  * Revision 1.6  1992/04/07  19:57:30  lmjm
+  * Added Kevins -B and -p options.
+@@ -93,7 +93,7 @@
+  * Make sofar printing size an option.
+  * 
+  * Revision 1.3  90/05/15  23:27:46  lmjm
+- * Added -S option (show how much has been writen).
++ * Added -S option (show how much has been written).
+  * Added -m option to specify how much shared memory to grab.
+  * Now tries to fill this with blocks.
+  * reader waits for writer to terminate and then frees the shared mem and sems.
+@@ -159,7 +159,7 @@
+ void pr_out();
+ void end_writer();
+ 
+-/* When showing print a note every this many bytes writen */
++/* When showing print a note every this many bytes written */
+ int showevery = 0;
+ #define PRINT_EVERY 10 K
+ 
+@@ -287,7 +287,7 @@
+ 
+ 	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:" )) != -1 ){
+ 		switch( c ){
+-		case 't': /* Print to stderr the total no of bytes writen */
++		case 't': /* Print to stderr the total no of bytes written */
+ 			print_total++;
+ 			break;
+ 		case 'u': /* pause after write for given microseconds */
+@@ -384,8 +384,8 @@
+ 			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size]\n",
+ 				progname );
+ 			fprintf( stderr, "-B = blocked device - pad out last block\n" );
+-			fprintf( stderr, "-t = show total amount writen at end\n" );
+-			fprintf( stderr, "-S size = show amount writen every size bytes\n" );
++			fprintf( stderr, "-t = show total amount written at end\n" );
++			fprintf( stderr, "-S size = show amount written every size bytes\n" );
+ 			fprintf( stderr, "-m size = size of shared mem chunk to grab\n" );
+ 			fprintf( stderr, "-b num = number of blocks in queue\n" );
+ 			fprintf( stderr, "-p percent = don't start writing until percent blocks filled\n" );

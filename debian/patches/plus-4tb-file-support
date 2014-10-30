@@ -1,0 +1,84 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -140,6 +140,14 @@
+ #define K *1024
+ #define M *1024*1024
+ 
++#if defined __GNUC__ || __STDC_VERSION__ >= 199901L
++#define NUM_K_TYPE unsigned long long
++#define NUM_K_FMT "llu"
++#else
++#define NUM_K_TYPE unsigned long
++#define NUM_K_FMT "lu"
++#endif
++
+ /* Some forward declarations */
+ void byee();
+ void start_reader_and_writer();
+@@ -254,7 +262,7 @@
+ 
+ char print_total = 0;
+ /* Number of K output */
+-unsigned long outk = 0;
++NUM_K_TYPE outk = 0;
+ 
+ struct timeval starttime;
+ 
+@@ -771,7 +779,7 @@
+ 	}
+ 
+ 	if( print_total ){
+-		fprintf( stderr, "Kilobytes Out %lu\n", outk );
++		fprintf( stderr, "Kilobytes Out %" NUM_K_FMT "\n", outk );
+ 	}
+ 
+ 	if( debug )
+@@ -812,14 +820,14 @@
+ void
+ write_block_to_stdout()
+ {
+-	static unsigned long out = 0;
++	unsigned long out = 0;
+ 	static unsigned long last_gb = 0;
+-	static unsigned long next_k = 0;
++	static NUM_K_TYPE next_k = 0;
+ 	int written;
+ 
+ 	if( next_k == 0 && showevery ){
+ 		if( debug > 3 )
+-			fprintf( stderr, "W: next_k = %lu showevery = %d\n", next_k, showevery );
++			fprintf( stderr, "W: next_k = %" NUM_K_FMT " showevery = %d\n", next_k, showevery );
+ 		showevery = showevery / 1024;
+ 		next_k = showevery;
+ 	}
+@@ -827,7 +835,7 @@
+ 	if( (written = write( fdout, curr_block->data, curr_block->bytes )) != curr_block->bytes ){
+ 		report_proc();
+ 		perror( "write of data failed" );
+-		fprintf( stderr, "bytes to write=%d, bytes written=%d, total written %10luK\n", curr_block->bytes, written, outk );
++		fprintf( stderr, "bytes to write=%d, bytes written=%d, total written %10" NUM_K_FMT "K\n", curr_block->bytes, written, outk );
+ 		byee( -1 );
+ 	}
+ 
+@@ -854,7 +862,7 @@
+ 	}
+ 	if( showevery ){
+ 		if( debug > 3 )
+-			fprintf( stderr, "W: outk = %lu, next_k = %lu\n",
++			fprintf( stderr, "W: outk = %" NUM_K_FMT ", next_k = %" NUM_K_FMT "\n",
+ 				outk, next_k );
+ 		if( outk >= next_k ){
+ 			pr_out();
+@@ -991,10 +999,10 @@
+ 		} else {
+ 			k_per_s = (outk / ms_delta) * 1000;
+ 		}
+-		fprintf( stderr, " %10luK, %10luK/s\r", outk, k_per_s );
++		fprintf( stderr, " %10" NUM_K_FMT "K, %10luK/s\r", outk, k_per_s );
+ 	} else {
+ 		if (outk) {
+-			fprintf( stderr, " %10luK,          ?K/s\r", outk );
++			fprintf( stderr, " %10" NUM_K_FMT "K,          ?K/s\r", outk );
+ 		} else {
+ 			fprintf( stderr, "          0K,          0K/s\r");
+ 		}

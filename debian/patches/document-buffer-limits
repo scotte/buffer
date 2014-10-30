@@ -1,0 +1,28 @@
+--- a/buffer.man
++++ b/buffer.man
+@@ -130,6 +130,25 @@
+ $ \fBtar cf - . | buffer | 
+ .br
+ \ \ \ rsh somehost 'buffer -S 500K -p 75 > /dev/rst0'\fP
++.SH BUFFER LIMITS
++There are 2 limits in
++.I buffer
++affecting the maximum total buffer size: The maximum number of blocks (2048)
++and the maximum size of a block (512kB). This results in a maximum total
++buffer size of 1GB.
++.PP
++
++Note that there is also a kernel limit for the maximum size of a shared
++memory segment (used by
++.I buffer
++internally) which is typically much lower than the limits in
++.IR buffer .
++So if
++.I buffer
++complains about not being able to create a shared memory segment, this limit
++might have to be raised using the command \fBsysctl kernel.shmmax=\fP\fIXXX\fP (see also
++sysctl(1) and proc(5)).
++
+ .SH BUGS
+ Internally, for printing purposes, buffer counts in terms of the
+ number of kilobytes output.  If the blocksize you use is not a whole

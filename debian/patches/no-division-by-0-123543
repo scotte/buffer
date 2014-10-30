@@ -1,0 +1,37 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -976,17 +976,29 @@
+ 	ms_delta = (now.tv_sec - starttime.tv_sec) * 1000
+ 		   + (now.tv_usec - starttime.tv_usec) / 1000;
+ 	if (ms_delta) {
+-		/* Use increased accuracy for small amounts of data */
++		/* Use increased accuracy for small amounts of data,
++		 * decreased accuracy for *huge* throughputs > 4.1GB/s
++		 * to avoid division by 0. This will overflow if your
++		 * machine's throughput exceeds 4TB/s - you deserve to
++		 * lose if you're still using 32 bit longs on such a
++		 * beast ;-)
++		 * <mbuck@debian.org>
++		 */
+ 		if (outk < ULONG_MAX / 1000) {
+ 			k_per_s = (outk * 1000) / ms_delta;
+-		} else {
++		} else if (ms_delta >= 1000) {
+ 			k_per_s = outk / (ms_delta / 1000);
++		} else {
++			k_per_s = (outk / ms_delta) * 1000;
+ 		}
++		fprintf( stderr, " %10luK, %10luK/s\r", outk, k_per_s );
+ 	} else {
+-		k_per_s = 0;
++		if (outk) {
++			fprintf( stderr, " %10luK,          ?K/s\r", outk );
++		} else {
++			fprintf( stderr, "          0K,          0K/s\r");
++		}
+ 	}
+-	
+-	fprintf( stderr, " %10luK, %10luK/s\r", outk, k_per_s );
+ }
+ 
+ #ifdef SYS5

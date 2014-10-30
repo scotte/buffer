@@ -1,0 +1,64 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -109,6 +109,9 @@
+  * Initial revision
+  * 
+  */
++#include <stdlib.h>
++#include <string.h>
++#include <limits.h>
+ #include <unistd.h>
+ #include <stdio.h>
+ #include <signal.h>
+@@ -120,6 +123,7 @@
+ #include <sys/shm.h>
+ #include <sys/sem.h>
+ #include <sys/wait.h>
++#include <sys/time.h>
+ #include "sem.h"
+ 
+ #ifndef lint
+@@ -252,6 +256,8 @@
+ /* Number of K output */
+ unsigned long outk = 0;
+ 
++struct timeval starttime;
++
+ int
+ main( argc, argv )
+ 	int argc;
+@@ -262,6 +268,8 @@
+ 	set_handlers();
+ 
+ 	buffer_allocate();
++	
++	gettimeofday(&starttime, NULL);
+ 
+ 	start_reader_and_writer();
+ 
+@@ -961,7 +969,24 @@
+ void
+ pr_out()
+ {
+-	fprintf( stderr, " %10luK\r", outk );
++	struct timeval now;
++	unsigned long ms_delta, k_per_s;
++	
++	gettimeofday(&now, NULL);
++	ms_delta = (now.tv_sec - starttime.tv_sec) * 1000
++		   + (now.tv_usec - starttime.tv_usec) / 1000;
++	if (ms_delta) {
++		/* Use increased accuracy for small amounts of data */
++		if (outk < ULONG_MAX / 1000) {
++			k_per_s = (outk * 1000) / ms_delta;
++		} else {
++			k_per_s = outk / (ms_delta / 1000);
++		}
++	} else {
++		k_per_s = 0;
++	}
++	
++	fprintf( stderr, " %10luK, %10luK/s\r", outk, k_per_s );
+ }
+ 
+ #ifdef SYS5

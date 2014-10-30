@@ -1,0 +1,60 @@
+--- a/buffer.c
++++ b/buffer.c
+@@ -507,14 +507,14 @@
+ 	get_buffer();
+ 
+ 	if( debug )
+-		fprintf( stderr, "%s pbuffer is 0x%08x, buffer_size is %d [%d x %d]\n",
++		fprintf( stderr, "%s pbuffer is 0x%08lx, buffer_size is %d [%d x %d]\n",
+ 			proc_string,
+-			(char *)pbuffer, buffer_size, blocks, blocksize );
++			(unsigned long)pbuffer, buffer_size, blocks, blocksize );
+ 
+ #ifdef SYS5
+-	memset( (char *)pbuffer, '\0', buffer_size );
++	memset( pbuffer->data_space, '\0', blocks * blocksize );
+ #else
+-	bzero( (char *)pbuffer, buffer_size );
++	bzero( pbuffer->data_space, blocks * blocksize );
+ #endif
+ 	pbuffer->semid = -1;
+ 	pbuffer->blocks_used_lock = -1;
+@@ -539,9 +539,20 @@
+ #else
+ 	sem_set( pbuffer->semid, pbuffer->blocks_free_lock, blocks );
+ #endif
++	
++	/* Do not detach the shared memory, but leave it mapped. It will be inherited
++	 * over fork just fine and this ensures that it's mapped at the same address
++	 * both in the reader and writer. The original code did a shmdt() here followed
++	 * by shmat() both in the reader and writer and relied on it getting mapped at
++	 * the same address in both processes, which of course isn't guaranteed and
++	 * actually did fail under some unknown circumstances on amd64.
++	 * <mbuck@debian.org> 2008-05-09
++	 */
++#if 0
+ 	/* Detattach the shared memory so the fork doesnt do anything odd */
+ 	shmdt( (char *)pbuffer );
+ 	pbuffer = NO_BUFFER;
++#endif
+ }
+ 
+ void
+@@ -629,8 +640,6 @@
+ 	if( debug )
+ 		fprintf( stderr, "R: Entering reader\n" );
+ 
+-	get_buffer();
+-
+ 	while( 1 ){
+ 		get_next_free_block();
+ 		if( ! fill_block() )
+@@ -723,8 +732,6 @@
+ 			blocks,
+ 			maxfilled );
+ 
+-	get_buffer();
+-
+ 	while( 1 ){
+ 		if( !filled )
+ 			first_block = pbuffer->next_block_out;

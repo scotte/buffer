@@ -1,0 +1,19 @@
+Source: buffer
+Section: utils
+Priority: optional
+Maintainer: Martin Buck <mbuck@debian.org>
+Standards-Version: 3.9.3.0
+Build-Depends: debhelper (>= 8)
+
+Package: buffer
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Buffering/reblocking program for tape backups, printing, etc.
+ Buffer implements double buffering and can be used to keep backup tapes
+ streaming or printers printing. It can also be used to convert a data
+ stream to a given output blocksize.
+ .
+ Buffer uses shared memory to convert a variable input data rate to a
+ constant output data rate. It is typically used in a pipe between a backup
+ program and the tape device, but there are also other applications like
+ buffering printer data in lpd's input filter.
