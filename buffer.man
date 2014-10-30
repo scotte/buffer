@@ -27,7 +27,8 @@ buffer \- very fast reblocking program
 .B buffer
 [\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-z size\fP] [\fB\-m size\fP]
 [\fB\-p percentage\fP] [\fB\-u microseconds\fP] [\fB-B\fR] [\fB-t\fR]
-[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] [\fB-d\fR]
+[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] [\fB-n size\fR] [\fB-w waitms\fR]
+[\fB-d\fR]
 .SH OPTIONS
 .TP 5
 .B \-i filename
@@ -86,6 +87,15 @@ then after each gigabyte perform an lseek to the start of the file.
 Use this flag with extreme care.  It can only be used on devices where
 an lseek does not rewind the tape but does reset the kernels position
 flags.  It is used to allow more than 2 gigabytes to be written.
+.TP
+.B \-n size
+If no buffer are available, purge up to this size bytes from stdin in an effort
+to keep the producer unblocked, at the cost of lost data.  Must be used with
+the -w option.
+.TP
+.B \-w waitms
+If no output buffer blocks are available, sleep for for waitms for a free block
+before purging stdin data.  Must be used with the -n option.
 .TP
 .B \-d
 Print debug information to stderr during operation.
