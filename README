@@ -1,0 +1,51 @@
+This is a program designed to speed up writing tapes on remote tape
+drives.  Requirements are shared memory and locks which normally
+means that these are supported in your kernel.
+
+Buffer has been tested under SunOS 4.0.*, SunOS 4.1.*, Solarix, HP-UX 7.0,
+and Gould UTX 2.1A (sv universe).
+
+The program splits itself into two processes.  The first process reads
+(and reblocks) from stdin into a shared memory buffer.  The second
+writes from the shared memory buffer to stdout.  Doing it this way
+means that the writing side effectly sits in a tight write loop and
+doesn't have to wait for input.  Similarly for the input side.  It is
+this waiting that slows down other reblocking processes, like dd.
+
+I run an archive and need to write large chunks out to tape regularly
+with an ethernet in the way.  Using 'buffer' in a command like:
+
+	tar cvf - stuff | rsh somebox buffer -o /dev/rst8
+
+is a factor of 5 faster than the best alternative, gnu tar with its
+remote tape option:
+
+	tar cvf somebox:/dev/rst8 stuff
+
+We have been using buffer here at Imperial for a couple of years now
+for writing tar tapes and the main system dumps.
+
+Thanks to Kevin Twidle <kpt@doc.ic.ac.uk> for the -p and -B code.
+Thanks to Bard Isley <brad@slammer.atl.ga.us> for fixes to the
+ read loop/SIGCHLD handling.
+Thanks to PerSteinar.Iversen@fi.uib.no for the DEC Alpha patches.
+Thanks to kargard@ampex.com (Erik L. Kargard) for the AMPEX enhancements.
+
+INSTALLATION:
+	Check that your kernel supports shared memory and semaphores.
+	A quick way to check is to build buffer and run it.
+	If it says "couldn't create shared memory segment" you probably
+	need to reconfigure and rebuild your kernel.
+
+	To install edit the Makefile and tailor the variables to
+	your local systems.  Then type make.
+
+DISCLAIMER:
+	This package is under the GNU GENERAL PUBLIC LICENSE!
+	In addtion under NO circumstances can I, or Imperial College,
+	be held liable for any event caused by the running or storing 
+	of this program or its documentation.
+	
+Lee McLoughlin.                           Phone: +44 171 594 8388
+IC-Parc, William Penney Lab,              Fax: +44 171 594 8449
+Imperial College, London, SW7 2BZ, UK     Email: L.McLoughlin@doc.ic.ac.uk

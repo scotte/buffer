@@ -1,0 +1,148 @@
+.\"    Buffer.  Very fast reblocking filter speedy writing of tapes.
+.\"    Copyright (C) 1990,1991  Lee McLoughlin
+.\"
+.\"    This program is free software; you can redistribute it and/or modify
+.\"    it under the terms of the GNU General Public License as published by
+.\"    the Free Software Foundation; either version 1, or (at your option)
+.\"    any later version.
+.\"
+.\"    This program is distributed in the hope that it will be useful,
+.\"    but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\"    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\"    GNU General Public License for more details.
+.\"
+.\"    You should have received a copy of the GNU General Public License
+.\"    along with this program; if not, write to the Free Software
+.\"    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+.\"
+.\"    Lee McLoughlin.
+.\"    Dept of Computing, Imperial College,
+.\"    180 Queens Gate, London, SW7 2BZ, UK.
+.\"
+.\"    Email: L.McLoughlin@doc.ic.ac.uk
+.TH BUFFER 1 "14 May 1990"
+.SH NAME
+buffer \- very fast reblocking program
+.SH SYNTAX
+.B buffer
+[\fB\-S size\fP] [\fB\-b blocks\fP] [\fB\-s size\fP] [\fB\-m size\fP]
+[\fB\-p percentage\fP] [\fB\-u microseconds\fP] [\fB-B\fR] [\fB-t\fR]
+[\fB-Z\fR] [\fB-i filename\fR] [\fB-o filename\fR] 
+.SH OPTIONS
+.TP 5
+.B \-i filename
+Use the given file as the input file.  The default is stdin.
+.TP
+.B \-o filename
+Use the given file as the output file.  The default is stdout.
+.TP
+.B \-S size
+After every chunk this size has been writen print out how much been writen so far.
+By default this is not set.
+.TP
+.B \-s size
+Size in bytes of each block.  The default blocksize is 10k to match
+the normal output of the
+.I tar(1)
+program.
+.TP
+.B \-z size
+Combines the
+.B \-S
+and
+.B \-s
+flags.
+.TP
+.B \-b blocks
+Number of blocks to allocate to shared memory circular buffer.
+Defaults to the number required to fill up the shared memory requested.
+.TP
+.B \-m size
+Maximum size of the shared memory chunk to allocate for the circular
+queue. Defaults to one megabyte.
+.TP
+.B \-p percentage
+Only start a write when the given percentage of the internal queue is
+full.  A percentage around 75 often proves best. Defaults to zero.
+.TP
+.B \-u microseconds
+After every write pause for this many microseconds.  Defaults to zero.
+(Suprisingly a small sleep, 100 usecs, after each write can greatly enhance
+throughput on some drives.)
+.TP
+.B \-B
+Force each block writen to be padded out to the blocksize.  This is needed by some tape
+and cartridge drives.  Defaults to unpadded.  This only affects the
+last block writen.
+.TP
+.B \-t
+On exiting print to stderr a brief message showing the total number of
+bytes written.
+.TP
+.B \-Z
+If reading/writing directly to a character device (like a tape drive)
+then after each gigabyte perform an lseek to the start of the file.
+Use this flag with extreme care.  If can only be used on devices where
+an lseek does not rewind the tape but does reset the kernels position
+flags.  It is used to allow more than 2 gigabytes to be written.
+.PP
+Sizes are a number with an optional trailing character.   A 'b' 
+multiplies the size by 512, a 'k' by 1024 and an 'm' by a meg.
+.SH DESCRIPTION
+.I Buffer
+reads from standard input reblocking to the given blocksize and writes
+each block to standard output.
+.PP
+Internally
+.I buffer
+is a pair of processes communicating via a large circular queue held
+in shared memory.  The reader process only has to block when the queue
+is full and the writer process when the queue is empty.
+.I Buffer
+is designed to try and keep the writer side continuously busy so that
+it can stream when writing to tape drives.  When used to write tapes
+with an intervening network
+.I buffer
+can result in a considerable increase in throughput.
+.PP
+The default settings for
+.I buffer
+are normally good enough.  If you are a heavy tape user then it is
+worth your while trying out various different combinations of options.
+In particular running a
+.I buffer
+at both ends of the pipe can provide a substantial increase (see last
+example below).
+.SH EXAMPLES
+.br
+$ \fBbuffer < /etc/termcap > /dev/rst8\fP
+.br
+.sp
+$ \fBtar cf - . | rsh somehost 'buffer > /dev/rst8'\fP
+.br
+.sp
+$ \fBdump fu - | rsh somehost 'buffer -s 16k > /dev/nrst8'\fP
+.br
+$ \fBtar cf - . | buffer | 
+.br
+\ \ \ rsh somehost 'buffer -S 500K -p 75 > /dev/rst0'\fP
+.SH BUGS
+Internally, for printing purposes, buffer counts in terms of the
+number of kilobytes output.  If the blocksize you use is not a whole
+number of kilobytes then the numbers printed will be inaccurate.
+
+.SH THANKS
+Thanks to Kevin Twidle <kpt@doc.ic.ac.uk> for a lot of early
+suggestions and patches to make it work with non-tar/dump tapes to
+exabyte drives.
+
+Thanks to Andi Karrer <karrer@bernina.ethz.ch>, Rumi Zahir
+<rumi@iis.ethz.ch> and Christoph Wicki <wicki@iis.ethz.ch> for patches
+to make buffer work when trying to write single tape files of greater
+than 2 gigabytes.
+
+.SH COPYRIGHT
+.if n Copyright (C) 1990, 1991 by Lee McLoughlin.
+.if t Copyright \(co 1990, 1991 by Lee McLoughlin.
+.SH SEE ALSO
+dd(1), tar(1), rsh(1)
