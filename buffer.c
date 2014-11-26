@@ -719,7 +719,7 @@ get_next_free_block()
 			        char buf[26];
 				ctime_r(&now, buf);
 				buf[strlen(buf)-1]='\0';
-				fprintf(stderr, "%s - No free buffers - Discarded %d bytes.\n", buf, leakedbytes);
+				fprintf(stderr, "%s - No free buffers - Discarded bytes: %d.\n", buf, leakedbytes);
 				nextleaklog = now + leakloginterval;
 				leakedbytes = 0;
 			}
