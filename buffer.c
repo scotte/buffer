@@ -117,6 +117,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ipc.h>
@@ -257,14 +258,19 @@ int free_shm	= 1;
 int percent	= 0;
 int debug	= 0;
 int Zflag	= 0;
-int nonblock = 0;
-int nonblockwait = 0;
 int writer_status = 0;
 char *progname = "buffer";
 
 char print_total = 0;
 /* Number of K output */
 NUM_K_TYPE outk = 0;
+
+/* Settings for nonblocking, 'leaky' mode */
+int nonblock = 0;
+int nonblockwait = 0;
+int leakloginterval = 0;
+int leakedbytes = 0;
+time_t nextleaklog = 0;
 
 struct timeval starttime;
 
@@ -303,7 +309,7 @@ parse_args( argc, argv )
 	struct stat buf;
 
 
-	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:n:w:" )) != -1 ){
+	while( (c = getopt( argc, argv, "BS:Zdm:s:b:p:u:ti:o:z:n:w:l:" )) != -1 ){
 		switch( c ){
 		case 't': /* Print to stderr the total no of bytes written */
 			print_total++;
@@ -400,10 +406,14 @@ parse_args( argc, argv )
 			break;
 		case 'n':
 			nonblock = do_size( optarg );
-            break;
+			break;
 		case 'w':
 			nonblockwait = atoi( optarg );
-            break;
+			break;
+		case 'l':
+			leakloginterval = atoi( optarg );
+			nextleaklog = time(NULL) + leakloginterval;
+			break;
 		default:
 			fprintf( stderr, "Usage: %s [-B] [-t] [-S size] [-m memsize] [-b blocks] [-p percent] [-s blocksize] [-u pause] [-i infile] [-o outfile] [-z size] [-Z] [-n size] [-w waitms] [-d]\n",
 				progname );
@@ -420,7 +430,8 @@ parse_args( argc, argv )
 			fprintf( stderr, "-z size = combined -S/-s flag\n" );
 			fprintf( stderr, "-Z = seek to beginning of output after each 1GB (for some tape drives)\n" );
 			fprintf( stderr, "-n size = enable nonblocking, if no buffers available, immediately read and purge this size of data\n" );
-			fprintf( stderr, "-w waitms = if nonblocking is enabled, wait this many milliseconds for a buffer before flushing data\n" );
+			fprintf( stderr, "-w waitms = if nonblocking, wait this many milliseconds for a buffer before flushing data\n" );
+			fprintf( stderr, "-l seconds = if nonblocking, only log how much data was flushed intervals of this many seconds (default=0, don't log)\n" );
             fprintf( stderr, "-d = print debug information to stderr\n" );
 			byee( -1 );
 		}
@@ -695,17 +706,28 @@ get_next_free_block()
 {
 	test_writer();
 
-    if (nonblock > 0) {
-        char buf[nonblock];
-        /* If no blocks free, read and purge some data */
-        if (lock_nowait( pbuffer->semid, pbuffer->blocks_free_lock,nonblockwait ) < 0) {
-            int count = read( fdin, buf, nonblock);
-            fprintf(stderr, "No buffers! - discarded %d\n", count);
-        }
-    } else {
-        /* Maybe wait till there is room in the buffer */
-        lock( pbuffer->semid, pbuffer->blocks_free_lock );
-    }
+	if (nonblock > 0) {
+		char buf[nonblock];
+		/* If no blocks free, read and purge some data */
+		if (lock_nowait( pbuffer->semid, pbuffer->blocks_free_lock,nonblockwait ) < 0 ) {
+			int count = read( fdin, buf, nonblock );
+			leakedbytes += count;
+
+			/* Log amount of purged data if it's time */
+			time_t now = time(NULL);
+			if ( leakloginterval > 0 && now >= nextleaklog ) {
+			        char buf[26];
+				ctime_r(&now, buf);
+				buf[strlen(buf)-1]='\0';
+				fprintf(stderr, "%s - No free buffers - Discarded %d bytes.\n", buf, leakedbytes);
+				nextleaklog = now + leakloginterval;
+				leakedbytes = 0;
+			}
+	}
+	} else {
+		/* Maybe wait till there is room in the buffer */
+		lock( pbuffer->semid, pbuffer->blocks_free_lock );
+	}
 
 	curr_block = &pbuffer->block[ pbuffer->next_block_in ];
 
